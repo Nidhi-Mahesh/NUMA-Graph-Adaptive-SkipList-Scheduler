@@ -384,6 +384,7 @@ pq_init(int max_offset)
     pq_t *pq;
     node_t *t, *h;
     int i;
+    static int gc_initialized = 0;
 
     /* head and tail nodes */
     t = calloc(1, sizeof *t + (NUM_LEVELS-1)*sizeof(node_t *));
@@ -405,8 +406,12 @@ pq_init(int max_offset)
     pq->tail = t;
     pq->max_offset = max_offset;
 
-    for (int i = 0; i < NUM_LEVELS; i++ )
-	gc_id[i] = gc_add_allocator(sizeof(node_t) + i*sizeof(node_t *));
+    /* Only register GC allocators once */
+    if (!gc_initialized) {
+        for (int i = 0; i < NUM_LEVELS; i++ )
+            gc_id[i] = gc_add_allocator(sizeof(node_t) + i*sizeof(node_t *));
+        gc_initialized = 1;
+    }
 
     return pq;
 }
