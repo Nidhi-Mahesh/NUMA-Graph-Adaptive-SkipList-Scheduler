@@ -50,8 +50,8 @@ main(int argc, char **argv)
     // Initialize garbage collection subsystem
     _init_gc_subsystem();
     
-    // Create the task graph
-    gs = graph_sched_create_random(n_tasks, edges_per_task);
+    // Create the task graph using standard priority queue
+    gs = graph_sched_create_random_prioq(n_tasks, edges_per_task);
     if (gs == NULL) {
         fprintf(stderr, "Error: Failed to create graph scheduler\n");
         exit(EXIT_FAILURE);
