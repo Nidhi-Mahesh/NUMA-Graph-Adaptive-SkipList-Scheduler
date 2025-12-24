@@ -21,7 +21,7 @@ endif
 VPATH	:= gc
 DEPS	+= Makefile $(wildcard *.h) $(wildcard gc/*.h)
 
-TARGETS := perf_meas numa_perf_meas unittests
+TARGETS := perf_meas numa_perf_meas graph_perf_meas unittests
 
 
 all:	$(TARGETS)
@@ -38,6 +38,10 @@ perf_meas: perf_meas.o ptst.o gc.o prioq.o common.o
 
 numa_perf_meas: CFLAGS+=-DNDEBUG
 numa_perf_meas: numa_perf_meas.o numa_prioq.o ptst.o gc.o prioq.o common.o
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+graph_perf_meas: CFLAGS+=-DNDEBUG
+graph_perf_meas: graph_perf_meas.o graph_sched.o ptst.o gc.o prioq.o common.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 unittests: unittests.o ptst.o gc.o prioq.o common.o
