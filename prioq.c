@@ -58,18 +58,52 @@ __thread ptst_t *ptst;
 
 static int gc_id[NUM_LEVELS];
 
+static _Atomic long retry_counter = 0;
+static _Atomic int  adaptive_mode = 0;  // 0 = normal, 1 = high-contention
+#define RETRY_THRESHOLD 100000
+
+static inline void record_retry(void) {
+    if (++retry_counter > RETRY_THRESHOLD && !adaptive_mode) {
+        adaptive_mode = 1;
+    }
+}
+
+long prioq_get_retry_counter(void) { return retry_counter; }
+int  prioq_get_adaptive_mode(void) { return adaptive_mode; }
+
+static int random_level_adaptive(void) {
+    /* crappy lcg rng */
+    unsigned int r = ptst->rand;
+    ptst->rand = r * 1103515245 + 12345;
+    r &= (1u << (NUM_LEVELS - 1)) - 1;
+    
+    int level;
+    if (adaptive_mode == 0) {
+        /* uniformly distributed bits => geom. dist. level, p = 0.5 */
+        level = __builtin_ctz(r) + 1;
+    } else {
+        /* increased average height: p = 0.75 for promotion roughly? 
+         * Or just use two numbers and take the max to skew towards higher values. */
+        unsigned int r2 = ptst->rand;
+        ptst->rand = r2 * 1103515245 + 12345;
+        r2 &= (1u << (NUM_LEVELS - 1)) - 1;
+        int l1 = __builtin_ctz(r) + 1;
+        int l2 = __builtin_ctz(r2) + 1;
+        level = (l1 > l2) ? l1 : l2;
+    }
+    
+    if (level > 32) level = 32;
+    return level;
+}
+
 
 /* initialize new node */
 static node_t *
 alloc_node()
 {
     node_t *n;
-    /* crappy lcg rng */
-    unsigned int r = ptst->rand;
-    ptst->rand = r * 1103515245 + 12345;
-    r &= (1u << (NUM_LEVELS - 1)) - 1;
-    /* uniformly distributed bits => geom. dist. level, p = 0.5 */
-    int level = __builtin_ctz(r) + 1;
+    /* adaptive random level */
+    int level = random_level_adaptive();
     assert(1 <= level && level <= 32);
 
     n = gc_alloc(ptst, gc_id[level - 1]);
@@ -191,6 +225,7 @@ insert(pq_t *pq, pkey_t k, pval_t v)
         /* either succ has been deleted (modifying preds[0]),
          * or another insert has succeeded or preds[0] is head,
          * and a restructure operation has updated it */
+        record_retry();
         goto retry;
     }
 
@@ -212,6 +247,7 @@ insert(pq_t *pq, pkey_t k, pval_t v)
         if (!__sync_bool_compare_and_swap(&preds[i]->next[i], succs[i], new))
         {
             /* failed due to competing insert or restructure */
+            record_retry();
             del = locate_preds(pq, k, preds, succs);
 
             /* if new has been deleted, we're done */
@@ -281,6 +317,8 @@ restructure(pq_t *pq)
         /* swing head pointer */
         if (__sync_bool_compare_and_swap(&pq->head->next[i],h,cur))
             i--;
+        else
+            record_retry();
     }
 }
 

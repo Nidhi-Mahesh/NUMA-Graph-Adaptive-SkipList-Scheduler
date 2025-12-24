@@ -49,4 +49,7 @@ extern pval_t deletemin(pq_t *pq);
 
 extern void sequential_length(pq_t *pq);
 
+extern long prioq_get_retry_counter(void);
+extern int  prioq_get_adaptive_mode(void);
+
 #endif // PRIOQ_H
